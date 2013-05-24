@@ -1,8 +1,9 @@
 from copy import copy
+from termcolor import cprint
 
 from agents.cognitive_agent import CognitiveAgent
-from constants import OBSTACLE_HEIGHT, NONE_COLOR
 from resources.cell import Cell
+from resources.constants import NONE_COLOR, TD, OBSTACLE_HEIGHT, NONE_COLOR
 
 
 def parse_file(input_file):
@@ -108,3 +109,32 @@ def get_agents(i, j, agents):
             agent_data = copy(agent.__dict__)
             cell_agents.append(agent_data)
     return cell_agents
+
+
+############################# DISPLAY #################################
+
+def display_cell(cell, agents):
+    # display height
+    if cell['color'] is not NONE_COLOR:
+        cprint(' %d\t' % cell['h'], cell['color'], end='')
+        return
+    if cell['h'] < 0:
+        # hole
+        print('%d' % cell['h']),
+    elif cell['h'] == 0:
+        # tile
+        print(' %d' % cell['h']),
+    else:
+        # obstacle
+        print(' #'),
+    # display agent
+    for agent in agents:
+        if agent.x == cell['x'] and agent.y == cell['y']:
+            cprint(',%d$' % agent.points, agent.color, end='')
+            if agent.carry_tile:
+                cprint(' *' % agent.carry_tile.color, end='')
+    #display tiles
+    if cell['tiles']:
+        for tile in cell['tiles']:
+            cprint('*', tile, end='')
+    print('\t'),

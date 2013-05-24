@@ -1,11 +1,9 @@
 import json
 from Queue import Queue
-import time
 from threading import Thread, Lock
-from time import localtime, strftime
-from termcolor import cprint
+import time
 
-from resources.constants import NONE_COLOR, TD
+from resources.utils import display_cell
 
 
 class Environment(Thread):
@@ -33,7 +31,7 @@ class Environment(Thread):
                 self.T = self.T - 1
             self.T = self.T-1
             time.sleep(1)
-#
+
         self.send_the_end()
 
 
@@ -71,36 +69,10 @@ class Environment(Thread):
         print '--------------------------------'
         for i in range(0, grid['H']):
             for j in range(0, grid['W']):
-                self._display_cell(grid['cells'][i][j], self.agents)
+                display_cell(grid['cells'][i][j], self.agents)
             print ''
         print '--------------------------------'
         self.display_lock.release()
-
-    def _display_cell(self, cell, agents):
-        # display height
-        if cell['color'] is not NONE_COLOR:
-            cprint(' %d\t' % cell['h'], cell['color'], end='')
-            return
-        if cell['h'] < 0:
-            # hole
-            print('%d' % cell['h']),
-        elif cell['h'] == 0:
-            # tile
-            print(' %d' % cell['h']),
-        else:
-            # obstacle
-            print(' #'),
-        # display agent
-        for agent in agents:
-            if agent.x == cell['x'] and agent.y == cell['y']:
-                cprint(',%d$' % agent.points, agent.color, end='')
-                if agent.carry_tile:
-                    cprint(' *' % agent.carry_tile.color, end='')
-        #display tiles
-        if cell['tiles']:
-            for tile in cell['tiles']:
-                cprint('*', tile, end='')
-        print('\t'),
 
     def _safe_print(self, message):
         self.display_lock.acquire()
