@@ -136,7 +136,7 @@ def display_cell(cell, agents):
     # display agent
     for agent in agents:
         if agent.x == cell['x'] and agent.y == cell['y']:
-            cprint(',%d$' % agent.points, agent.color, end='')
+            cprint(',%d' % agent.points, agent.color, end='')
             if agent.carry_tile:
                 cprint('* ', agent.carry_tile, end='')
     print('\t\t'),

@@ -42,7 +42,7 @@ class Environment(Thread):
         self.send_the_end()
 
 
-########################### COMMUNICATION ###########################
+########################### C O M M U N I C A T I O N ########################
 
     def check_mailbox(self):
         self.queue_lock.acquire()
@@ -149,7 +149,7 @@ class Environment(Thread):
             self.send(agent.name, message)
 
 
-############################# DISPLAY #################################
+############################# D I S P L A Y #################################
 
     def display_grid(self, grid):
         self.display_lock.acquire()
@@ -166,7 +166,7 @@ class Environment(Thread):
         print "[%s] %s" % (self.name, message)
         self.display_lock.release()
 
-############################# UTILS #################################
+############################# U T I L S #################################
 
     def localize(self, requester):
         """Return the agent position within the grid.""" 
