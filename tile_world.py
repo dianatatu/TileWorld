@@ -26,10 +26,13 @@ if len(sys.argv) == 2:
 # colors: N colors of the agents
 # pos: N zero-based integers - the initial positions of the agents
 # obstacles: pairs of coordinates for obstacles
-t, T, grid, agents = parse_file(input_file)
-N = len(agents)
+t, T, grid, agent_data = parse_file(input_file)
 
-print bfs(0,0,3,3,grid)
+agents = []
+for data in agent_data:
+    agents.append(CognitiveAgent(data[0], data[1], data[2], data[3]))
+
+N = len(agents)
 
 threads = []
 
@@ -62,7 +65,7 @@ for thread in threads:
     thread.start()
 
 # wait for T milliseconds
-time.sleep(T)
+#time.sleep(T)
 
 for thread in threads:
     thread.join()

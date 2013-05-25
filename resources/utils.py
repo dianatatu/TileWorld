@@ -2,7 +2,6 @@ from copy import copy
 from Queue import Queue
 from termcolor import cprint
 
-from agents.cognitive_agent import CognitiveAgent
 from resources.cell import Cell
 from resources.constants import NONE_COLOR, TD, OBSTACLE_HEIGHT, NONE_COLOR
 
@@ -44,7 +43,7 @@ def parse_file(input_file):
 
     agents = []
     for i in range(0, N):
-        agents.append(CognitiveAgent(i, pos[i][0], pos[i][1], colors[i]))
+        agents.append(("agent%s" % i, pos[i][0], pos[i][1], colors[i]))
 
     grid = {}
     grid['H'] = H
@@ -106,9 +105,8 @@ def get_agents(i, j, agents):
     """Returns all agents situated on a (i, j) tile."""
     cell_agents = []
     for agent in agents:
-        if agent.x == i and agent.y == j:
-            agent_data = copy(agent.__dict__)
-            cell_agents.append(agent_data)
+        if agent[1] == i and agent[2] == j:
+            cell_agents.append(agent)
     return cell_agents
 
 
@@ -143,7 +141,8 @@ def display_cell(cell, agents):
 
 
 def bfs(start_x, start_y, stop_x, stop_y, grid):
-    """A BFS traversal of a 2D grid."""
+    """A BFS traversal of a 2D grid. The agent stop when he reaches the stop
+    cell."""
     q = Queue()
     temp_path = [(start_x, start_y)]
     q.put(temp_path)
@@ -153,7 +152,7 @@ def bfs(start_x, start_y, stop_x, stop_y, grid):
         last_node = tmp_path[len(tmp_path)-1]
 
         if last_node == (stop_x, stop_y):
-            return tmp_path
+            return tmp_path[1:]
 
         next = up(last_node, grid)
         if next and next not in tmp_path:
@@ -178,6 +177,49 @@ def bfs(start_x, start_y, stop_x, stop_y, grid):
             new_path = []
             new_path = tmp_path + [next]
             q.put(new_path)
+
+def near_bfs(start_x, start_y, stop_x, stop_y, grid):
+    """A BFS traversal of a 2D grid. The agent stop when is near stop cell."""
+    q = Queue()
+    temp_path = [(start_x, start_y)]
+    q.put(temp_path)
+
+    while not q.empty():
+        tmp_path = q.get()
+        last_node = tmp_path[len(tmp_path)-1]
+
+        if is_near(last_node, stop_x, stop_y):
+            return tmp_path[1:]
+
+        next = up(last_node, grid)
+        if next and next not in tmp_path:
+            new_path = []
+            new_path = tmp_path + [next]
+            q.put(new_path)
+
+        next = down(last_node, grid)
+        if next and next not in tmp_path:
+            new_path = []
+            new_path = tmp_path + [next]
+            q.put(new_path)
+
+        next = left(last_node, grid)
+        if next and next not in tmp_path:
+            new_path = []
+            new_path = tmp_path + [next]
+            q.put(new_path)
+
+        next = right(last_node, grid)
+        if next and next not in tmp_path:
+            new_path = []
+            new_path = tmp_path + [next]
+            q.put(new_path)
+
+def is_near(cell, x, y):
+    if ( (abs(cell[0]-x) == 1 and cell[1]==y) or
+         (abs(cell[1]-y) == 1 and cell[0]==x)):
+            return True
+    return False
 
 def up(position, grid):
     if position[0]==0: return None

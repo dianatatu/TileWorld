@@ -26,6 +26,8 @@ class Environment(Thread):
             if message:
                 if message['type'] == 'request_entire_state':
                     self.respond_entire_state(message['from'])
+                elif message['type'] == 'request_action':
+                    self.perform_action(message['action'], message['from'])
                 self.T = self.T - self.t
             else:
                 self.T = self.T - 1
@@ -56,6 +58,34 @@ class Environment(Thread):
         message.update({'grid': self.grid})
         self.send(requester, message)
 
+    def perform_action(self, action, requester):
+        if action['type'] == 'go_to':
+            self.perform_go_to_action(action, requester)
+
+    def perform_go_to_action(self, action, requester):
+        from_x, from_y = self.localize(requester)
+        to_x, to_y = action['x'], action['y']
+
+        is_valid = ( (abs(to_x-from_x) == 1 and to_y==from_y) or
+                     (abs(to_y-from_y) == 1 and to_x==from_x) )
+        is_safe = self.grid['cells'][to_x][to_y]['h'] == 0
+        if is_valid and is_safe:
+            agent = [agent for agent in self.agents if agent.name==requester][0]
+            agent.x, agent.y = to_x, to_y
+            self.grid['cells'][from_x][from_y]['agents'].remove((agent.name,
+                                                                 from_x, from_y,
+                                                                 agent.color))
+            self.grid['cells'][to_x][to_y]['agents'].append((agent.name,
+                                                             agent.x, agent.y,
+                                                             agent.color))
+            self.send(requester, {'type': 'response_action',
+                                  'action': action,
+                                  'status': 'OK'})
+        else:
+            self.send(requester, {'type': 'response_action',
+                                  'action': action,
+                                  'status': 'FAIL'})
+
     def send_the_end(self):
         message = {'type': 'the_end'}
         for agent in self.agents:
@@ -78,3 +108,16 @@ class Environment(Thread):
         self.display_lock.acquire()
         print "[%s] %s" % (self.name, message)
         self.display_lock.release()
+
+############################# UTILS #################################
+
+    def localize(self, requester):
+        """Return the agent position within the grid.""" 
+        for i in range(0, self.grid['H']):
+            for j in range(0, self.grid['W']):
+                for agent in self.grid['cells'][i][j]['agents']:
+                    if agent[0] == requester:
+                        return (i, j)
+
+        self._safe_print("[E] Agent not found!")
+        return None
