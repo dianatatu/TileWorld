@@ -47,6 +47,7 @@ class CognitiveAgent(Thread):
                     else:
                         self._safe_print("Action was refused by environment.")
                         self.request_entire_state()
+                        self.can_request_entire_state = False
 
             # No mail for me!
             else:
