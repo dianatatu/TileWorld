@@ -102,7 +102,7 @@ class CognitiveAgent(Thread):
         elif action['type'] == 'pick':
             self.pickup(action['color'])
         elif action['type'] == 'drop':
-            self.drop()
+            self.drop(action['points'])
 
     def pickup(self, color):
         if self.carry_tile:
@@ -110,7 +110,7 @@ class CognitiveAgent(Thread):
             return
         self.carry_tile = color
 
-    def drop(self):
+    def drop(self, points):
         if not self.carry_tile:
             self._safe_print("Agent has no picked up tile")
             return

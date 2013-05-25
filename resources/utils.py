@@ -115,7 +115,10 @@ def get_agents(i, j, agents):
 def display_cell(cell, agents):
     # display height
     if cell['color'] is not NONE_COLOR:
-        cprint('%d\t\t' % cell['h'], cell['color'], end='')
+        if cell['h']<0:
+            cprint('%d\t\t' % cell['h'], cell['color'], end='')
+        if cell['h']==0:
+            cprint(' %d\t\t' % cell['h'], cell['color'], end='')
         return
     if cell['h'] < 0:
         # hole

@@ -3,6 +3,7 @@ from Queue import Queue
 from threading import Thread, Lock
 import time
 
+from resources.constants import REWARD, BONUS
 from resources.utils import display_cell
 
 
@@ -102,7 +103,6 @@ class Environment(Thread):
                      self.exists_tile(from_x, from_y, color) and
                      not agent.carry_tile)
         if is_valid:
-            #agent.carry_tile = color
             self.grid['cells'][from_x][from_y]['tiles'].remove(color)
             self.send(requester, {'type': 'response_action',
                                   'action': action,
@@ -127,13 +127,18 @@ class Environment(Thread):
 
         is_valid = is_near and has_tile and colors_match
         if is_valid:
-            #agent.carry_tile = None
+            points = REWARD
+            if self.grid['cells'][action['x']][action['y']]['h'] == -1:
+                points = points + BONUS
+            agent.points += points
             cell = self.grid['cells'][action['x']][action['y']] 
             cell['h'] = cell['h'] + 1
+            action.update({'points': points})
             self.send(requester, {'type': 'response_action',
                                   'action': action,
                                   'status': 'OK'})
         else:
+            action.update({'points': 0})
             self.send(requester, {'type': 'response_action',
                                   'action': action,
                                   'status': 'FAIL'})
