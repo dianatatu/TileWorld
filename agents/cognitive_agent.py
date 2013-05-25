@@ -2,6 +2,8 @@ from Queue import Queue
 import time
 from threading import Thread, Lock
 
+from termcolor import cprint
+
 from resources.constants import REWARD, BONUS
 from resources import utils
 
@@ -37,24 +39,31 @@ class CognitiveAgent(Thread):
                 if message['type'] == 'response_entire_state':
                     self._safe_print("I have the entire state!")
                     self.grid = message['grid']
+                    self.can_request_entire_state = True
                 if message['type'] == 'response_action':
                     self.waiting_for_response = False
                     if message['status'] == 'OK':
                         self.perform_action(message['action'])
                     else:
                         self._safe_print("Action was refused by environment.")
+                        self.request_entire_state()
 
             # No mail for me!
             else:
                 if not self.grid:
                     continue
-                elif self.plan:
+                if len(self.plan) > 0:
                     if not self.waiting_for_response:
                         self.go_on_with_my_plan()
                 else:
                     self.plan = self.get_most_efficient_plan()
-#                    self._safe_print("My plan: %r" % self.plan)
-                    self.go_on_with_my_plan()
+                    if len(self.plan) > 0:
+                        if not self.waiting_for_response:
+                            self.go_on_with_my_plan()
+                    else:
+                        if self.can_request_entire_state:
+                            self.request_entire_state()
+                            self.can_request_entire_state = False
 
 
 ########################### COMMUNICATION ###########################
@@ -90,14 +99,18 @@ class CognitiveAgent(Thread):
     def perform_action(self, action):
         if action['type'] == 'go_to':
             self.go_to(action['x'], action['y'])
+        elif action['type'] == 'pick':
+            self.pickup(action['color'])
+        elif action['type'] == 'drop':
+            self.drop()
 
-    def pickup(self, tile):
+    def pickup(self, color):
         if self.carry_tile:
             self._safe_print("Agent already has picked up a tile")
             return
-        self.carry_tile = tile
+        self.carry_tile = color
 
-    def drop(self, tile):
+    def drop(self):
         if not self.carry_tile:
             self._safe_print("Agent has no picked up tile")
             return
@@ -131,46 +144,49 @@ class CognitiveAgent(Thread):
                     elif self.grid['cells'][i][j]['h'] == -1:
                         holes.append((i, j, REWARD+BONUS))
 
-        min_cost = {'value': 9999, 'hole': None, 'tile': None}
+        max_gain = {'value': -9999, 'hole': None, 'tile': None}
         for tile in tiles:
             for hole in holes:
-                cost = 0
+                gain = 0
                 # go to tile
                 path = self.get_shortest_path(self.x, self.y, tile[0], tile[1])
-                cost -= len(path)
+                gain -= len(path)
                 # pick tile
-                cost -= 1
+                gain -= 1
                 # go near hole and drop tile
-                cost -= len(self.get_shortest_near_path(path[len(path)-1][0],
+                gain -= len(self.get_shortest_near_path(path[len(path)-1][0],
                                                         path[len(path)-1][1],
                                                         hole[0], hole[1]))
-                cost += hole[2]
-                if cost < min_cost['value']:
-                    min_cost['value'] = cost
-                    min_cost['tile'] = tile
-                    min_cost['hole'] = (hole[0], hole[1])
+                gain += hole[2]
+                if gain > max_gain['value']:
+                    max_gain['value'] = gain
+                    max_gain['tile'] = tile
+                    max_gain['hole'] = (hole[0], hole[1])
 
-#        if min_cost['value'] <= 0:
+#        if max_gain['value'] <= 0:
 #            return None
+        if max_gain['value'] == -9999:
+            return []
 
         plan = []
         # go to the closest
         tile_path = self.get_shortest_path(self.x, self.y,
-                                           min_cost['tile'][0],
-                                           min_cost['tile'][1])
+                                           max_gain['tile'][0],
+                                           max_gain['tile'][1])
         for move in tile_path:
             plan.append({'type': 'go_to',
                          'x': move[0],
                          'y': move[1]})
 
         plan.append({'type': 'pick',
-                     'x': min_cost['tile'][0],
-                     'y': min_cost['tile'][1]})
+                     'x': max_gain['tile'][0],
+                     'y': max_gain['tile'][1],
+                     'color': self.color})
 
         hole_path = self.get_shortest_near_path(tile_path[len(tile_path)-1][0],
                                                 tile_path[len(tile_path)-1][1],
-                                                min_cost['hole'][0],
-                                                min_cost['hole'][1])
+                                                max_gain['hole'][0],
+                                                max_gain['hole'][1])
 
         for move in hole_path:
             plan.append({'type': 'go_to',
@@ -178,14 +194,15 @@ class CognitiveAgent(Thread):
                          'y': move[1]})
 
         plan.append({'type': 'drop',
-                     'x': min_cost['hole'][0],
-                     'y': min_cost['hole'][1]})
+                     'x': max_gain['hole'][0],
+                     'y': max_gain['hole'][1],
+                     'color': self.color})
 
         return plan
 
     def _safe_print(self, message):
         self.display_lock.acquire()
-        print "[%s] %s" % (self.name, message)
+        cprint('%s: %s' % (self.name, message), self.color, end='\n')
         self.display_lock.release()
 
     def get_shortest_path(self, from_x, from_y, to_x, to_y):

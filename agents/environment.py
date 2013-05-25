@@ -28,6 +28,10 @@ class Environment(Thread):
                     self.respond_entire_state(message['from'])
                 elif message['type'] == 'request_action':
                     self.perform_action(message['action'], message['from'])
+                elif message['type'] == 'pick':
+                    self.perform_pick_action(message['action'], message['from'])
+                elif message['type'] == 'drop':
+                    self.perform_drop_action(message['action'], message['from'])
                 self.T = self.T - self.t
             else:
                 self.T = self.T - 1
@@ -61,6 +65,10 @@ class Environment(Thread):
     def perform_action(self, action, requester):
         if action['type'] == 'go_to':
             self.perform_go_to_action(action, requester)
+        elif action['type'] == 'pick':
+            self.perform_pick_action(action, requester)
+        elif action['type'] == 'drop':
+            self.perform_drop_action(action, requester)
 
     def perform_go_to_action(self, action, requester):
         from_x, from_y = self.localize(requester)
@@ -78,6 +86,50 @@ class Environment(Thread):
             self.grid['cells'][to_x][to_y]['agents'].append((agent.name,
                                                              agent.x, agent.y,
                                                              agent.color))
+            self.send(requester, {'type': 'response_action',
+                                  'action': action,
+                                  'status': 'OK'})
+        else:
+            self.send(requester, {'type': 'response_action',
+                                  'action': action,
+                                  'status': 'FAIL'})
+
+    def perform_pick_action(self, action, requester):
+        from_x, from_y = self.localize(requester)
+        agent = [agent for agent in self.agents if agent.name==requester][0]
+        color = action['color']
+        is_valid = (from_x == agent.x and from_y == agent.y and
+                     self.exists_tile(from_x, from_y, color) and
+                     not agent.carry_tile)
+        if is_valid:
+            #agent.carry_tile = color
+            self.grid['cells'][from_x][from_y]['tiles'].remove(color)
+            self.send(requester, {'type': 'response_action',
+                                  'action': action,
+                                  'status': 'OK'})
+        else:
+            self.send(requester, {'type': 'response_action',
+                                  'action': action,
+                                  'status': 'FAIL'})
+
+    def perform_drop_action(self, action, requester):
+        from_x, from_y = self.localize(requester)
+        agent = [agent for agent in self.agents if agent.name==requester][0]
+
+        color = action['color']
+
+        is_near = ( (abs(from_x-action['x'])==1 and from_y == action['y']) or
+                     (abs(from_y-action['y'])==1 and from_x == action['x']) )
+        has_tile = agent.carry_tile is not None
+        colors_match = (agent.carry_tile ==
+                        self.grid['cells'][action['x']][action['y']]['color'])
+        is_hole = self.grid['cells'][action['x']][action['y']]['h'] < 0
+
+        is_valid = is_near and has_tile and colors_match
+        if is_valid:
+            #agent.carry_tile = None
+            cell = self.grid['cells'][action['x']][action['y']] 
+            cell['h'] = cell['h'] + 1
             self.send(requester, {'type': 'response_action',
                                   'action': action,
                                   'status': 'OK'})
@@ -121,3 +173,12 @@ class Environment(Thread):
 
         self._safe_print("[E] Agent not found!")
         return None
+
+    def exists_tile(self, x, y, color):
+        """Returns True if a tile with color=color exists on (x,y) cell within
+        the grid.
+        """
+        for tile_color in self.grid['cells'][x][y]['tiles']:
+            if tile_color == color:
+                return True
+        return False

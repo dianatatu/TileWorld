@@ -115,7 +115,7 @@ def get_agents(i, j, agents):
 def display_cell(cell, agents):
     # display height
     if cell['color'] is not NONE_COLOR:
-        cprint(' %d\t' % cell['h'], cell['color'], end='')
+        cprint('%d\t\t' % cell['h'], cell['color'], end='')
         return
     if cell['h'] < 0:
         # hole
@@ -126,19 +126,17 @@ def display_cell(cell, agents):
     else:
         # obstacle
         print(' #'),
+    #display tiles
+    if cell['tiles']:
+        for tile in cell['tiles']:
+            cprint('*', tile, end='')
     # display agent
     for agent in agents:
         if agent.x == cell['x'] and agent.y == cell['y']:
             cprint(',%d$' % agent.points, agent.color, end='')
             if agent.carry_tile:
-                cprint(' *' % agent.carry_tile.color, end='')
-    #display tiles
-    if cell['tiles']:
-        for tile in cell['tiles']:
-            cprint('*', tile, end='')
-    print('\t'),
-
-
+                cprint('* ', agent.carry_tile, end='')
+    print('\t\t'),
 
 def bfs(start_x, start_y, stop_x, stop_y, grid):
     """A BFS traversal of a 2D grid. The agent stop when he reaches the stop
