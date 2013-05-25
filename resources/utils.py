@@ -1,4 +1,5 @@
 from copy import copy
+from Queue import Queue
 from termcolor import cprint
 
 from agents.cognitive_agent import CognitiveAgent
@@ -138,3 +139,78 @@ def display_cell(cell, agents):
         for tile in cell['tiles']:
             cprint('*', tile, end='')
     print('\t'),
+
+
+
+def bfs(start_x, start_y, stop_x, stop_y, grid):
+    """A BFS traversal of a 2D grid."""
+    q = Queue()
+    temp_path = [(start_x, start_y)]
+    q.put(temp_path)
+
+    while not q.empty():
+        tmp_path = q.get()
+        last_node = tmp_path[len(tmp_path)-1]
+
+        if last_node == (stop_x, stop_y):
+            return tmp_path
+
+        next = up(last_node, grid)
+        if next and next not in tmp_path:
+            new_path = []
+            new_path = tmp_path + [next]
+            q.put(new_path)
+
+        next = down(last_node, grid)
+        if next and next not in tmp_path:
+            new_path = []
+            new_path = tmp_path + [next]
+            q.put(new_path)
+
+        next = left(last_node, grid)
+        if next and next not in tmp_path:
+            new_path = []
+            new_path = tmp_path + [next]
+            q.put(new_path)
+
+        next = right(last_node, grid)
+        if next and next not in tmp_path:
+            new_path = []
+            new_path = tmp_path + [next]
+            q.put(new_path)
+
+def up(position, grid):
+    if position[0]==0: return None
+    next_x = position[0]-1
+    next_y = position[1]
+
+    if grid['cells'][next_x][next_y]['h'] != 0:
+        return None
+    return (next_x, next_y)
+
+def down(position, grid):
+    if position[0]==grid['H']-1: return None
+    next_x = position[0]+1
+    next_y = position[1]
+
+    if grid['cells'][next_x][next_y]['h'] != 0:
+        return None
+    return (next_x, next_y)
+
+def left(position, grid):
+    if position[1]==0: return None
+    next_x = position[0]
+    next_y = position[1]-1
+
+    if grid['cells'][next_x][next_y]['h'] != 0:
+        return None
+    return (next_x, next_y)
+
+def right(position, grid):
+    if position[1]==grid['W']-1: return None
+    next_x = position[0]
+    next_y = position[1]+1
+
+    if grid['cells'][next_x][next_y]['h'] != 0:
+        return None
+    return (next_x, next_y)

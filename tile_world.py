@@ -6,7 +6,7 @@ from agents.environment import Environment
 from agents.cognitive_agent import CognitiveAgent
 from resources.constants import DEFAULT_INPUT_FILE
 from resources.kestrel_connection import KestrelConnection
-from resources.utils import parse_file
+from resources.utils import parse_file, bfs
 
 
 # check parameters
@@ -28,6 +28,8 @@ if len(sys.argv) == 2:
 # obstacles: pairs of coordinates for obstacles
 t, T, grid, agents = parse_file(input_file)
 N = len(agents)
+
+print bfs(0,0,3,3,grid)
 
 threads = []
 

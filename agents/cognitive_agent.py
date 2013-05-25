@@ -15,20 +15,12 @@ class CognitiveAgent(Thread):
         self.color = color
         self.queue = Queue()
         self.queue_lock = Lock()
-
-    def __unicode__(self):
-        return '<%s, (%s,%s) -> %s>' % (self.name, self.x, self.y, self.color)
+        self.grid = None
 
     def run(self):
         self.request_entire_state()
 #        # wait for entire state response
-#        while True:
-#            if self.queue_system.peek(self.name):
-#                message = self.queue_system.fetch_from(self.name)
-#                if message and message['type'] == 'response_entire_state':
-#                    grid = message['grid']
-#                    break
-#
+
 #        # get the most efficient plan
 #        plans = self.get_most_efficient_plan(grid)
 
@@ -40,6 +32,7 @@ class CognitiveAgent(Thread):
                 break
             if message['type'] == 'response_entire_state':
                 self._safe_print("I have the entire state!")
+                self.grid = message['grid']
 
 
 ########################### COMMUNICATION ###########################
@@ -84,6 +77,9 @@ class CognitiveAgent(Thread):
 
 ########################## UTILS ##############################
 
+    def __unicode__(self):
+        return '<%s, (%s,%s) -> %s>' % (self.name, self.x, self.y, self.color)
+
     def get_most_efficient_plan(self, grid):
         pass
 
@@ -91,3 +87,6 @@ class CognitiveAgent(Thread):
         self.display_lock.acquire()
         print "[%s] %s" % (self.name, message)
         self.display_lock.release()
+
+    def get_shortest_path(self, to_x, to_y):
+        utils.bfs(self.x, self.y, to_x, to_y, self.grid)
