@@ -20,6 +20,7 @@ class Environment(Thread):
         self.queue_lock = Lock()
 
     def run(self):
+        """Main loop of action."""
         while self.T > 0:
             if self.T % TD == 0:
                 self.display_grid(self.grid)
@@ -47,6 +48,7 @@ class Environment(Thread):
 ########################### C O M M U N I C A T I O N ########################
 
     def check_mailbox(self):
+        """Checks if some other agent sent a message."""
         self.queue_lock.acquire()
         message = None
         if not self.queue.empty():
@@ -55,17 +57,20 @@ class Environment(Thread):
         return message
 
     def send(self, to, message):
+        """Sends mail to a specified agent."""
         queue, queue_lock = self.queue_system[to]
         queue_lock.acquire()
         queue.put(message)
         queue_lock.release()
 
     def respond_entire_state(self, requester):
+        """Sends a message containg the entire current state of the grid."""
         message = {'type': 'response_entire_state'}
         message.update({'grid': self.grid})
         self.send(requester, message)
 
     def perform_action(self, action, requester):
+        """Updates the environment grid according to an agent's move."""
         if action['type'] == 'go_to':
             self.perform_go_to_action(action, requester)
         elif action['type'] == 'pick':
@@ -74,6 +79,9 @@ class Environment(Thread):
             self.perform_drop_action(action, requester)
 
     def perform_go_to_action(self, action, requester):
+        """Validates the received go_to move request. If valid, updates the
+        environment grid according to a go_to agent's move.
+        """
         from_x, from_y = self.localize(requester)
         to_x, to_y = action['x'], action['y']
 
@@ -98,6 +106,9 @@ class Environment(Thread):
                                   'status': 'FAIL'})
 
     def perform_pick_action(self, action, requester):
+        """Validates the received pick request. If valid, updates the
+        environment grid according to a pick agent's move.
+        """
         from_x, from_y = self.localize(requester)
         agent = [agent for agent in self.agents if agent.name==requester][0]
         color = action['color']
@@ -115,6 +126,9 @@ class Environment(Thread):
                                   'status': 'FAIL'})
 
     def perform_drop_action(self, action, requester):
+        """Validates the received drop request. If valid, updates the
+        environment grid according to a drop agent's move.
+        """
         from_x, from_y = self.localize(requester)
         agent = [agent for agent in self.agents if agent.name==requester][0]
 
@@ -132,7 +146,9 @@ class Environment(Thread):
             points = REWARD
             if self.grid['cells'][action['x']][action['y']]['h'] == -1:
                 points = points + BONUS
-            agent.points += points
+            rewarder = [agent for agent in self.agents if 
+                        agent.color == color][0]
+            rewarder.points += points
             cell = self.grid['cells'][action['x']][action['y']] 
             cell['h'] = cell['h'] + 1
             action.update({'points': points})
@@ -146,6 +162,7 @@ class Environment(Thread):
                                   'status': 'FAIL'})
 
     def transfer_points(self, from_agent, to_agent, value):
+        """Tranfers points from one agent to another."""
         for agent in self.agents:
             if agent.name == from_agent:
                 agent.points = agent.points - value
@@ -158,6 +175,8 @@ class Environment(Thread):
                               'status': 'OK'})
 
     def send_the_end(self):
+        """Sends a the_end message to all agents. This is the last message sent.
+        """
         message = {'type': 'the_end'}
         for agent in self.agents:
             self.send(agent.name, message)
@@ -166,6 +185,7 @@ class Environment(Thread):
 ############################# D I S P L A Y #################################
 
     def display_grid(self, grid):
+        """Displays the current state of the environment grid."""
         self.display_lock.acquire()
         print '--------------------------------'
         print "[T = %s]" % int(time.time())
@@ -178,6 +198,9 @@ class Environment(Thread):
         self.display_lock.release()
 
     def _safe_print(self, message):
+        """Logs message to standard output. Uses a lock to prevent dithering
+        messages from agents.
+        """
         self.display_lock.acquire()
         print "[%s] %s" % (self.name, message)
         self.display_lock.release()
@@ -185,7 +208,7 @@ class Environment(Thread):
 ############################# U T I L S #################################
 
     def localize(self, requester):
-        """Return the agent position within the grid.""" 
+        """Returns the agent position within the grid.""" 
         for i in range(0, self.grid['H']):
             for j in range(0, self.grid['W']):
                 for agent in self.grid['cells'][i][j]['agents']:

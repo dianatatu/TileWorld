@@ -3,7 +3,7 @@ OBSTACLE_HEIGHT = 1
 NONE_COLOR = 'none'
 
 # time between grid displays
-TD = 10
+TD = 1
 
 REWARD = 10
 BONUS = 40

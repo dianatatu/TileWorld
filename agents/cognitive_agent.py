@@ -33,6 +33,7 @@ class CognitiveAgent(Thread):
 
 
     def run(self):
+        """Main loop of action."""
         self.request_entire_state()
         can_request_entire_state = False
 
@@ -123,6 +124,7 @@ class CognitiveAgent(Thread):
 ########################### C O M M U N I C A T I O N #########################
 
     def check_mailbox(self):
+        """Checks if some other agent sent a message."""
         self.queue_lock.acquire()
         message = None
         if not self.queue.empty():
@@ -131,6 +133,9 @@ class CognitiveAgent(Thread):
         return message
 
     def send(self, message, to=None):
+        """Sends mail to other agents. If no destination provided, by default,
+        the message is sent to each agent (except 'environment' agent).
+        """
         if to:
             queue, queue_lock = self.queue_system[to]
             queue_lock.acquire()
@@ -152,9 +157,11 @@ class CognitiveAgent(Thread):
                     queue_lock.release()
 
     def send_proposal(self, proposal):
+        """Sends a proposal message containing an offer."""
         self.send({'type': 'proposal', 'proposal': proposal})
 
     def request_entire_state(self):
+        """Sends a request for the entire state to engironment agent."""
         self._safe_print("Requesting entire state")
         self.send({'type': 'request_entire_state'}, to='environment')
 
@@ -165,6 +172,9 @@ class CognitiveAgent(Thread):
 ########################### A C T I O N S ###########################
 
     def perform_action(self, action):
+        """Move agent according to the accepted request by the environment
+        agent. Possible moves: go_to, pick, drop.
+        """
         if action['type'] == 'go_to':
             self.go_to(action['x'], action['y'])
         elif action['type'] == 'pick':
@@ -173,22 +183,26 @@ class CognitiveAgent(Thread):
             self.drop(action['points'])
 
     def pickup(self, color):
+        """Picks up a tile from the current cell."""
         if self.carry_tile:
             self._safe_print("Agent already has picked up a tile")
             return
         self.carry_tile = color
 
     def drop(self, points):
+        """Drops the carrying tile in the current cell."""
         if not self.carry_tile:
             self._safe_print("Agent has no picked up tile")
             return
         self.carry_tile = None
 
     def go_to(self, x, y):
+        """Move agent to (x, y) cell."""
         self.x = x
         self.y = y
 
     def go_on_with_my_plan(self):
+        """Get next action from the current performing plan."""
         if len(self.current_plan['actions']) == 0:
             if len(self.plans) == 0:
                 return
@@ -205,6 +219,7 @@ class CognitiveAgent(Thread):
 ########################## N E G O C I A T I N G ##############################
 
     def make_proposals(self):
+        """Compose a proposal for other agents."""
         for plan in self.plans:
             proposal = {}
             proposal['id'] = plan['id']
@@ -217,14 +232,18 @@ class CognitiveAgent(Thread):
             self.my_proposals.append(proposal)
 
     def investigate_proposals(self):
+        """Investigates all pending proposals. These proposals could not be
+        investigated when received because there was no knowledge about the
+        grid environment.
+        """
         for message in self.their_proposals:
             self.investigate_proposal(message['proposal'], message['from'])
 
     def investigate_proposal(self, proposal, requester):
-        """Investigate the actual reward if executing this plan after finishing
-        the current one.
-        """
-        self._safe_print(self.current_plan)
+        """Investigates the actual cost and reward of the received proposal.
+        Decides whether accept the proposal or not. This proposal is thought
+        to be executed after finishing the current action plan.
+        """ 
         proposed_reward = proposal['reward']
         tile = proposal['tile']
         hole = proposal['hole']
@@ -248,16 +267,25 @@ class CognitiveAgent(Thread):
             self.refuse_proposal(proposal, requester)
 
     def accept_proposal(self, proposal, requester):
+        """Sends message to agent and inform him that the proposal has been
+        accepted.
+        """
         message = {'type': 'accept_proposal',
                    'proposal': proposal}
         self.send(message, requester)
 
     def refuse_proposal(self, proposal, requester):
+        """Sends message to agent and inform him that the proposal has been
+        refused.
+        """
         message = {'type': 'refuse_proposal',
                    'proposal': proposal}
         self.send(message, requester)
 
     def shake_hands(self, proposal):
+        """The last step of the 'three-way handshake' after accepting a
+        proposal and before adding the proposal to agent's next steps.
+        """
         self._safe_print("Sending shake hands on %r to %r of color %r" % (proposal['proposal']['id'], proposal['from'], proposal['proposal']['color']))
         self.send({'type': 'shake_hands', 'proposal': proposal},
                   proposal['from'])
@@ -267,6 +295,8 @@ class CognitiveAgent(Thread):
                   'environment')
 
     def remove_plan(self, id):
+        """If one action plan was accepted by other agent, remove it from the
+        current pending plans."""
         for plan in self.plans:
             if plan['id'] == id:
                 self.plans.remove(plan)
@@ -278,6 +308,9 @@ class CognitiveAgent(Thread):
         return '<%s, (%s,%s) -> %s>' % (self.name, self.x, self.y, self.color)
 
     def get_plan(self, from_x, from_y, tile, hole, color):
+        """Forms a plan of unit actions that pick a tile and drops it in a
+        specified hole.
+        """
         actions = []
         # go to the closest cell near hole
         tile_path = self.get_shortest_path(from_x, self.y, tile[0], tile[1])
@@ -315,6 +348,9 @@ class CognitiveAgent(Thread):
 
 
     def get_available_plans(self):
+        """Inspects the environment grid and obtain all action plans available
+        in order to collect all tiles and fill in all holes.
+        """
         tiles = []
         holes = []
         for i in range(0, self.grid['H']):
@@ -324,22 +360,26 @@ class CognitiveAgent(Thread):
                         tiles.append((i,j))
                 if self.grid['cells'][i][j]['color'] == self.color:
                     if self.grid['cells'][i][j]['h'] < -1:
-                        holes.append((i, j, REWARD))
+                        holes.append((i, j, 5+REWARD))
                     elif self.grid['cells'][i][j]['h'] == -1:
-                        holes.append((i, j, REWARD+BONUS))
+                        holes.append((i, j, 5*REWARD+BONUS))
         plans = []
         max_gain = {'value': -9999, 'hole': None, 'tile': None}
         for tile in tiles:
             for hole in holes:
                 # go to tile
+                self._safe_print("get shortest path from %d, %d to %d, %d" %
+                                 (self.x, self.y, tile[0], tile[1]))
+
                 path = self.get_shortest_path(self.x, self.y, tile[0], tile[1])
                 minus = len(path)
                 # pick tile
                 minus += 1
                 # go near hole and drop tile
+                self._safe_print(path)
                 minus += len(self.get_shortest_near_path(path[len(path)-1][0],
-                                                        path[len(path)-1][1],
-                                                        hole[0], hole[1]))
+                                                         path[len(path)-1][1],
+                                                         hole[0], hole[1]))
                 minus += 1
                 plus = hole[2]
                 gain = - minus + plus
@@ -399,12 +439,19 @@ class CognitiveAgent(Thread):
         return plans
 
     def _safe_print(self, message):
+        """Logs message to standard output. Uses a lock to prevent dithering
+        messages from agents.
+        """
         self.display_lock.acquire()
         cprint('[%s] %s: %s' % (int(time.time()), self.name, message), self.color, end='\n')
         self.display_lock.release()
 
     def get_shortest_path(self, from_x, from_y, to_x, to_y):
+        """Returns the shortest path between 2 grid cells."""
         return utils.bfs(from_x, from_y, to_x, to_y, self.grid)
 
     def get_shortest_near_path(self, from_x, from_y, to_x, to_y):
+        """Returns the shortest path between a cell grid and a neighbour of
+        another cell. Used when searching for a way to pick a tile and drop it
+        from a cell that is close to the hole."""
         return utils.near_bfs(from_x, from_y, to_x, to_y, self.grid)
