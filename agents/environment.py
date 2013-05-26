@@ -16,7 +16,6 @@ class Environment(Thread):
         self.T = T
         self.grid = grid
         self.agents = agents
-        self.points = {}
         self.queue = Queue()
         self.queue_lock = Lock()
 
@@ -33,6 +32,8 @@ class Environment(Thread):
                     self.perform_pick_action(message['action'], message['from'])
                 elif message['type'] == 'drop':
                     self.perform_drop_action(message['action'], message['from'])
+                elif message['type'] == 'transfer_points':
+                    self.transfer_points(message['from'], message['to'], message['value'])
                 self.T = self.T - self.t
             else:
                 self.T = self.T - 1
@@ -142,6 +143,18 @@ class Environment(Thread):
             self.send(requester, {'type': 'response_action',
                                   'action': action,
                                   'status': 'FAIL'})
+
+    def transfer_points(self, from_agent, to_agent, value):
+        for agent in self.agents:
+            if agent.name == from_agent:
+                agent.points = agent.points - value
+            if agent.name == to_agent:
+                agent.points = agent.points + value
+        self.send(from_agent, {'type': 'response_transfer_points',
+                              'from': from_agent,
+                              'value': value,
+                              'to': to_agent,
+                              'status': 'OK'})
 
     def send_the_end(self):
         message = {'type': 'the_end'}

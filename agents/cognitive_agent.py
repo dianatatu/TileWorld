@@ -9,6 +9,7 @@ from resources.constants import REWARD, BONUS
 from resources import utils
 
 REWARD_PERCENT = 0.75
+NEGOCIATION_TIME = 6
 
 
 class CognitiveAgent(Thread):
@@ -25,11 +26,11 @@ class CognitiveAgent(Thread):
         self.queue_lock = Lock()
         self.grid = None
         self.plans = []
-        self.plan = []
         self.can_request_entire_state = True
         self.waiting_for_response = False
-        self.negociating = False
-        self.pending_proposals = []
+        self.their_proposals = []
+        self.my_proposals = []
+
 
     def run(self):
         self.request_entire_state()
@@ -42,12 +43,17 @@ class CognitiveAgent(Thread):
             if message:
                 if message['type'] == 'the_end':
                     break
+
                 elif message['type'] == 'response_entire_state':
                     self._safe_print("I have the entire state!")
                     self.grid = message['grid']
-                    self.can_request_entire_state = True
-                    if len(self.pending_proposals) > 0:
+                    if len(self.plans) == 0:
+                        self.plans = self.get_available_plans()
+                        self.current_plan = self.plans.pop(0)
+                        self.make_proposals()
+                    if len(self.their_proposals) > 0:
                         self.investigate_proposals()
+                    self.can_request_entire_state = True
 
                 elif message['type'] == 'response_action':
                     self.waiting_for_response = False
@@ -57,43 +63,62 @@ class CognitiveAgent(Thread):
                         self._safe_print("Action was refused by environment.")
                         self.request_entire_state()
                         self.can_request_entire_state = False
+
+                elif message['type'] == 'response_transfer_points':
+                    if message['status'] == 'OK':
+                        self._safe_print("I transferred %r points to %r"
+                                         % (message['value'], message['to']))
+                    else:
+                        self._safe_print("I couldn't transfer %r points to %r"
+                                         % (message['value'], message['to']))
+
                 elif message['type'] == 'proposal':
-                    self._safe_print("Received proposal from %r: %r"
-                                     % (message['from'], message['proposal']))
+                    self._safe_print("Received proposal %r from %r"
+                                     % (message['proposal']['id'], message['from']))
                     if self.grid:
                         self._safe_print("Investigating ...")
-                        self.investigate_proposal(message['proposal'], message['from'])
+                        self.investigate_proposal(message['proposal'],
+                                                  message['from'])
                     else:
-                        self.pending_proposals.append(message)
+                        self.their_proposals.append(message)
                         self._safe_print("I have no knowledge about the grid. "
                                          "Postponing proposal.")
+
                 elif message['type'] == 'accept_proposal':
                     self._safe_print(":) %r accepted proposal %r"
                                      % (message['from'], message['proposal']))
-                elif message['type'] == 'refine_proposal':
-                    self._safe_print(":) %r want a refine on proposal %r"
-                                     % (message['from'], message['proposal']))
+                    self.shake_hands(message)
+                    self.remove_plan(message['proposal']['id'])
+
                 elif message['type'] == 'refuse_proposal':
                     self._safe_print(":( %r refused proposal %r"
                                      % (message['from'], message['proposal']))
 
+                elif message['type'] == 'shake_hands':
+                    self._safe_print("Shake hands on %r with %r for %r points."
+                                     % (message['proposal']['proposal']['id'],
+                                        message['from'],
+                                        message['proposal']['proposal']['reward']))
+                    self.plans.insert(0, self.get_plan(self.current_plan['actions'][len(self.current_plan['actions'])-1]['x'],
+                                                       self.current_plan['actions'][len(self.current_plan['actions'])-1]['y'],
+                                                       message['proposal']['proposal']['tile'],
+                                                       message['proposal']['proposal']['hole'],
+                                                       message['proposal']['proposal']['color']))
+
             # No mail for me!
             else:
-                if not self.grid or self.negociating:
+                if not self.grid:
                     continue
-                if len(self.plans) > 0:
+                if len(self.current_plan) > 0 or len(self.plans) > 0:
                     if not self.waiting_for_response:
                         self.go_on_with_my_plan()
                 else:
-                    self.plans = self.get_available_plans()
                     if len(self.plans) > 0:
-                        self.negociating = True
                         self.make_proposals()
                     else:
                         if self.can_request_entire_state:
                             self.request_entire_state()
                             self.can_request_entire_state = False
-
 
 ########################### C O M M U N I C A T I O N #########################
 
@@ -164,7 +189,16 @@ class CognitiveAgent(Thread):
         self.y = y
 
     def go_on_with_my_plan(self):
-        next_move = self.plan['actions'].pop(0)
+        if len(self.current_plan['actions']) == 0:
+            if len(self.plans) == 0:
+                return
+            self.current_plan = self.plans.pop(0)
+            self.current_plan = self.get_plan(self.x, self.y, 
+                                              self.current_plan['tile'],
+                                              self.current_plan['hole'],
+                                              self.current_plan['color'])
+            self._safe_print("My new plan: %r" % self.current_plan)
+        next_move = self.current_plan['actions'].pop(0)
         self.request_move(next_move)
         self.waiting_for_response = True
 
@@ -177,32 +211,40 @@ class CognitiveAgent(Thread):
             proposal['reward'] = int(plan['reward'] * REWARD_PERCENT)
             proposal['tile'] = plan['tile']
             proposal['hole'] = plan['hole'][:-1]
+            proposal['initiator'] = self.name
+            proposal['color'] = self.color
             self.send_proposal(proposal)
+            self.my_proposals.append(proposal)
 
     def investigate_proposals(self):
-        for message in self.pending_proposals:
+        for message in self.their_proposals:
             self.investigate_proposal(message['proposal'], message['from'])
 
     def investigate_proposal(self, proposal, requester):
+        """Investigate the actual reward if executing this plan after finishing
+        the current one.
+        """
+        self._safe_print(self.current_plan)
         proposed_reward = proposal['reward']
         tile = proposal['tile']
         hole = proposal['hole']
-        my_cost = len(self.get_shortest_path(self.x, self.y, tile[0], tile[1]))
+
+        from_x = self.current_plan['actions'][len(self.current_plan['actions'])-1]['x']
+        from_y = self.current_plan['actions'][len(self.current_plan['actions'])-1]['y']
+
+        my_cost = len(self.get_shortest_path(from_x, from_y, tile[0], tile[1]))
         my_cost = my_cost + 1
         my_cost = my_cost + len(self.get_shortest_near_path(tile[0], tile[1],
-                                                        hole[0], hole[1]))
+                                                            hole[0], hole[1]))
         my_cost = my_cost + 1
         actual_reward = proposed_reward - my_cost
         if actual_reward > 0:
-            self._safe_print("Accept proposal from %r. Actual reward = %d-%d = %d"
-                             % (requester, proposed_reward, my_cost, actual_reward))
+            self._safe_print("Accept proposal %r from %r. Actual reward = %d-%d = %d"
+                             % (proposal['id'], requester, proposed_reward, my_cost, actual_reward))
             self.accept_proposal(proposal, requester)
-        elif actual_reward > 0 - int(REWARD_PERCENT * actual_reward):
-            self._safe_print("Asking for a refine from %r" % requester)
-            self.refine_proposal(proposal, requester)
         else:
-            self._safe_print("Refusing proposal from %r. Actual reward = %d-%d = %d"
-                              % (requester, proposed_reward, my_cost, actual_reward))
+            self._safe_print("Refusing proposal %r from %r. Actual reward = %d-%d = %d"
+                              % (requester, proposal['id'], proposed_reward, my_cost, actual_reward))
             self.refuse_proposal(proposal, requester)
 
     def accept_proposal(self, proposal, requester):
@@ -210,16 +252,67 @@ class CognitiveAgent(Thread):
                    'proposal': proposal}
         self.send(message, requester)
 
-    def refine_proposal(self, proposal, requester):
-        pass
-
     def refuse_proposal(self, proposal, requester):
-        pass
+        message = {'type': 'refuse_proposal',
+                   'proposal': proposal}
+        self.send(message, requester)
+
+    def shake_hands(self, proposal):
+        self._safe_print("Sending shake hands on %r to %r of color %r" % (proposal['proposal']['id'], proposal['from'], proposal['proposal']['color']))
+        self.send({'type': 'shake_hands', 'proposal': proposal},
+                  proposal['from'])
+        self.send({'type': 'transfer_points',
+                   'value': proposal['proposal']['reward'],
+                   'to': proposal['from']},
+                  'environment')
+
+    def remove_plan(self, id):
+        for plan in self.plans:
+            if plan['id'] == id:
+                self.plans.remove(plan)
+                break
 
 ################################# U T I L S ##################################
 
     def __unicode__(self):
         return '<%s, (%s,%s) -> %s>' % (self.name, self.x, self.y, self.color)
+
+    def get_plan(self, from_x, from_y, tile, hole, color):
+        actions = []
+        # go to the closest cell near hole
+        tile_path = self.get_shortest_path(from_x, self.y, tile[0], tile[1])
+        for move in tile_path:
+            actions.append({'type': 'go_to',
+                            'x': move[0],
+                            'y': move[1]})
+
+        actions.append({'type': 'pick',
+                        'x': tile[0],
+                        'y': tile[1],
+                        'color': color})
+
+        hole_path = self.get_shortest_near_path(tile_path[len(tile_path)-1][0],
+                                                tile_path[len(tile_path)-1][1],
+                                                hole[0], hole[1])
+
+        for move in hole_path:
+            actions.append({'type': 'go_to',
+                            'x': move[0],
+                            'y': move[1]})
+
+        actions.append({'type': 'drop',
+                        'x': hole[0],
+                        'y': hole[1],
+                        'color': color})
+
+        return {
+            'id': uuid.uuid4(),
+            'actions': actions,
+            'tile': tile,
+            'hole': hole,
+            'color': color
+        }
+
 
     def get_available_plans(self):
         tiles = []
@@ -294,8 +387,10 @@ class CognitiveAgent(Thread):
                     'cost': minus,
                     'reward': plus,
                     'tile': tile,
-                    'hole': hole
+                    'hole': hole,
+                    'color': self.color
                 }
+
                 plans.append(plan)
 
         if max_gain['value'] < 0:
@@ -305,7 +400,7 @@ class CognitiveAgent(Thread):
 
     def _safe_print(self, message):
         self.display_lock.acquire()
-        cprint('%s: %s' % (self.name, message), self.color, end='\n')
+        cprint('[%s] %s: %s' % (int(time.time()), self.name, message), self.color, end='\n')
         self.display_lock.release()
 
     def get_shortest_path(self, from_x, from_y, to_x, to_y):
