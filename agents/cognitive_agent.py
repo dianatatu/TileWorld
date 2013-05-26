@@ -286,7 +286,7 @@ class CognitiveAgent(Thread):
         """The last step of the 'three-way handshake' after accepting a
         proposal and before adding the proposal to agent's next steps.
         """
-        self._safe_print("Sending shake hands on %r to %r of color %r" % (proposal['proposal']['id'], proposal['from'], proposal['proposal']['color']))
+        #self._safe_print("Sending shake hands on %r to %r of color %r" % (proposal['proposal']['id'], proposal['from'], proposal['proposal']['color']))
         self.send({'type': 'shake_hands', 'proposal': proposal},
                   proposal['from'])
         self.send({'type': 'transfer_points',
@@ -368,15 +368,11 @@ class CognitiveAgent(Thread):
         for tile in tiles:
             for hole in holes:
                 # go to tile
-                self._safe_print("get shortest path from %d, %d to %d, %d" %
-                                 (self.x, self.y, tile[0], tile[1]))
-
                 path = self.get_shortest_path(self.x, self.y, tile[0], tile[1])
                 minus = len(path)
                 # pick tile
                 minus += 1
                 # go near hole and drop tile
-                self._safe_print(path)
                 minus += len(self.get_shortest_near_path(path[len(path)-1][0],
                                                          path[len(path)-1][1],
                                                          hole[0], hole[1]))
