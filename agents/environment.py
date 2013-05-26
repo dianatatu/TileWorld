@@ -3,7 +3,7 @@ from Queue import Queue
 from threading import Thread, Lock
 import time
 
-from resources.constants import REWARD, BONUS
+from resources.constants import REWARD, BONUS, TD
 from resources.utils import display_cell
 
 
@@ -21,7 +21,8 @@ class Environment(Thread):
 
     def run(self):
         while self.T > 0:
-            self.display_grid(self.grid)
+            if self.T % TD == 0:
+                self.display_grid(self.grid)
             message = self.check_mailbox()
             if message:
                 if message['type'] == 'request_entire_state':
@@ -166,6 +167,8 @@ class Environment(Thread):
 
     def display_grid(self, grid):
         self.display_lock.acquire()
+        print '--------------------------------'
+        print "[T = %s]" % int(time.time())
         print '--------------------------------'
         for i in range(0, grid['H']):
             for j in range(0, grid['W']):
