@@ -5,7 +5,6 @@ import time
 from agents.environment import Environment
 from agents.cognitive_agent import CognitiveAgent
 from resources.constants import DEFAULT_INPUT_FILE
-from resources.kestrel_connection import KestrelConnection
 from resources.utils import parse_file, bfs
 
 
@@ -44,7 +43,7 @@ environment.display_lock = display_lock
 for agent in agents:
     agent.display_lock = display_lock
 
-# let all agents know about all each other
+# let all agents know about all each other's queues
 queues = {}
 queues[environment.name] = (environment.queue, environment.queue_lock)
 for agent in agents:
@@ -63,9 +62,6 @@ threads.append(environment)
 # start all threads
 for thread in threads:
     thread.start()
-
-# wait for T milliseconds
-#time.sleep(T)
 
 for thread in threads:
     thread.join()
